@@ -19,11 +19,13 @@ describe('Object CDN Worker', () => {
     
     // Mock R2 bucket
     mockEnv = {
-      IMAGES: {
+      R2: {
         get: vi.fn(),
         head: vi.fn(),
         list: vi.fn(),
       },
+      // Set R2 bucket binding configuration for tests
+      R2_BUCKET_BINDING: 'R2',
       // Add worker configuration
       STORAGE: {
         maxRetries: 3,
@@ -81,7 +83,7 @@ describe('Object CDN Worker', () => {
   });
 
   it('responds with OK for health check endpoint', async () => {
-    mockEnv.IMAGES.list.mockResolvedValue({ objects: [] });
+    mockEnv.R2.list.mockResolvedValue({ objects: [] });
     
     const request = new Request('http://example.com/_health');
     const response = await worker.fetch(request, mockEnv, ctx);
@@ -89,11 +91,11 @@ describe('Object CDN Worker', () => {
     
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("OK");
-    expect(mockEnv.IMAGES.list).toHaveBeenCalledWith({ limit: 1 });
+    expect(mockEnv.R2.list).toHaveBeenCalledWith({ limit: 1 });
   });
 
   it('responds with Service Unavailable when health check fails', async () => {
-    mockEnv.IMAGES.list.mockRejectedValue(new Error('Connection error'));
+    mockEnv.R2.list.mockRejectedValue(new Error('Connection error'));
     
     const request = new Request('http://example.com/_health');
     const response = await worker.fetch(request, mockEnv, ctx);
@@ -104,18 +106,18 @@ describe('Object CDN Worker', () => {
   });
 
   it('returns 404 for non-existent objects', async () => {
-    mockEnv.IMAGES.get.mockResolvedValue(null);
+    mockEnv.R2.get.mockResolvedValue(null);
     
     const request = new Request('http://example.com/image.jpg');
     const response = await worker.fetch(request, mockEnv, ctx);
     await waitOnExecutionContext(ctx);
     
     expect(response.status).toBe(404);
-    expect(mockEnv.IMAGES.get).toHaveBeenCalled();
+    expect(mockEnv.R2.get).toHaveBeenCalled();
   });
 
   it('returns object with correct content type and caching headers', async () => {
-    mockEnv.IMAGES.get.mockResolvedValue(mockR2Object);
+    mockEnv.R2.get.mockResolvedValue(mockR2Object);
     
     const request = new Request('http://example.com/document.pdf');
     const response = await worker.fetch(request, mockEnv, ctx);
@@ -130,7 +132,7 @@ describe('Object CDN Worker', () => {
   });
 
   it('returns object listing with JSON response', async () => {
-    mockEnv.IMAGES.list.mockResolvedValue({
+    mockEnv.R2.list.mockResolvedValue({
       objects: [
         { key: 'file1.jpg', size: 1024, etag: 'etag1', uploaded: new Date() },
         { key: 'file2.pdf', size: 2048, etag: 'etag2', uploaded: new Date() }
@@ -154,7 +156,7 @@ describe('Object CDN Worker', () => {
     expect(data.objects[1].type).toBe('document');
     expect(data.truncated).toBe(false);
     
-    expect(mockEnv.IMAGES.list).toHaveBeenCalledWith({
+    expect(mockEnv.R2.list).toHaveBeenCalledWith({
       prefix: 'file',
       limit: 100,
       cursor: undefined,

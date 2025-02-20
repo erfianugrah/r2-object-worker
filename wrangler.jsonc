@@ -2,8 +2,8 @@
   // Basic configuration
   "name": "r2-objects-worker", // Updated name to reflect the new purpose
   "main": "src/index.js",
-  "compatibility_date": "2024-05-12",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2023-03-01",
+  "compatibility_flags": ["nodejs_compat", "export_commonjs_default"],
 
   // Development settings
   "dev": {
@@ -14,6 +14,9 @@
 
   // Worker configuration values - defined at top-level and can be overridden in environments
   "vars": {
+    // R2 bucket binding configuration
+    "R2_BUCKET_BINDING": "R2",
+    
     // Storage settings
     "STORAGE": {
       "maxRetries": 3,
@@ -94,6 +97,7 @@
       "name": "staging-r2-objects-worker",
       "vars": { 
         "ENVIRONMENT": "staging",
+        "R2_BUCKET_BINDING": "R2",
         // Staging-specific overrides
         "CACHE": {
           // Just override the specific fields you want to change
@@ -127,7 +131,7 @@
       },
       "workers_dev": true,
       "r2_buckets": [
-        { "binding": "IMAGES", "bucket_name": "images" }
+        { "binding": "R2", "bucket_name": "images" }
       ]
     },
     
@@ -136,6 +140,7 @@
       "name": "prod-r2-objects-worker",
       "vars": { 
         "ENVIRONMENT": "production",
+        "R2_BUCKET_BINDING": "R2",
         "STORAGE": {
           "maxRetries": 3,
           "retryDelay": 1000,
@@ -195,7 +200,7 @@
         { "pattern": "cdn.erfianugrah.com", "custom_domain": true }
       ],
       "r2_buckets": [
-        { "binding": "IMAGES", "bucket_name": "images" }
+        { "binding": "R2", "bucket_name": "images" }
       ]
     }
   }

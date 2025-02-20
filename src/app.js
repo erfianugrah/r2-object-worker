@@ -14,8 +14,9 @@ export function createApp(env) {
   // Load configuration from environment
   const config = new Config(env);
   
-  // Initialize infrastructure
-  const storageAdapter = new R2StorageAdapter(env.IMAGES, config);
+  // Initialize infrastructure with the configured R2 bucket binding from config
+  const bucketBinding = config.getBucketBinding();
+  const storageAdapter = new R2StorageAdapter(env[bucketBinding], config);
   
   // Initialize domains
   // Object domain

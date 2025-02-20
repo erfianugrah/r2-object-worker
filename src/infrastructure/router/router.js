@@ -47,7 +47,7 @@ export class Router {
   /**
    * Handle root path
    */
-  handleRoot() {
+  async handleRoot() {
     return new Response("Object CDN", {
       status: 200,
       headers: { "Content-Type": "text/plain" },

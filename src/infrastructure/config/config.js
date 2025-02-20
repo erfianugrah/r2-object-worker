@@ -9,6 +9,9 @@ export class Config {
     // Environment name
     this.environment = env.ENVIRONMENT || 'development';
     
+    // Store R2 bucket binding configuration
+    this.bucketBinding = env.R2_BUCKET_BINDING || 'R2';
+    
     // Use environment variables directly with fallbacks
     this.storage = env.STORAGE || this.getDefaultStorage();
     this.cache = env.CACHE || this.getDefaultCache();
@@ -116,6 +119,13 @@ export class Config {
    */
   getSecurityConfig() {
     return this.security;
+  }
+  
+  /**
+   * Get bucket binding name
+   */
+  getBucketBinding() {
+    return this.bucketBinding;
   }
   
   /**
