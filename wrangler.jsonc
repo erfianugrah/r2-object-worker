@@ -229,6 +229,7 @@
 		}
 	}
 }
+<<<<<<< HEAD
 =======
 	// Basic configuration
 "name": "r2-objects-worker", // Updated name to reflect the new purpose
@@ -461,3 +462,5 @@
 }
 }
 >>>>>>> 9ba6d08 (removed compat flag)
+=======
+>>>>>>> e819324 (removed compat flag)
