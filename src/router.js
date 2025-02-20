@@ -1,4 +1,3 @@
-import { handleHealthCheck } from "./handlers/healthCheck.js";
 import { handleImageRequest } from "./handlers/imageHandler.js";
 import {
   handleError,
@@ -10,16 +9,17 @@ export async function router(request, env) {
   try {
     const url = new URL(request.url);
 
-    // Handle health check endpoint
-    if (url.pathname === "/_health") {
-      return await handleHealthCheck(env);
-    }
-
-    // Handle root path
-    if (url.pathname === "/") {
-      return new Response("Image CDN", {
+    // Handle root path, health and _health endpoints with same response for LB
+    if (
+      url.pathname === "/" || url.pathname === "/_health" ||
+      url.pathname === "/health"
+    ) {
+      return new Response("OK", {
         status: 200,
-        headers: { "Content-Type": "text/plain" },
+        headers: {
+          "Content-Type": "text/plain",
+          "Cache-Control": "no-store",
+        },
       });
     }
 
