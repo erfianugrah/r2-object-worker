@@ -1,7 +1,8 @@
-import { router } from "./router.js";
+import { createApp } from "./app.js";
 
 export default {
   async fetch(request, env) {
-    return router(request, env);
+    const app = createApp(env);
+    return app.route(request);
   },
 };

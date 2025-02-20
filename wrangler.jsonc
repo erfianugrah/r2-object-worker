@@ -1,0 +1,202 @@
+{
+  // Basic configuration
+  "name": "r2-objects-worker", // Updated name to reflect the new purpose
+  "main": "src/index.js",
+  "compatibility_date": "2024-05-12",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Development settings
+  "dev": {
+    "port": 9001,
+    "local_protocol": "http",
+    "upstream_protocol": "https"
+  },
+
+  // Worker configuration values - defined at top-level and can be overridden in environments
+  "vars": {
+    // Storage settings
+    "STORAGE": {
+      "maxRetries": 3,
+      "retryDelay": 1000,
+      "exponentialBackoff": true,
+      "defaultListLimit": 1000
+    },
+    
+    // Cache settings
+    "CACHE": {
+      "defaultMaxAge": 86400,
+      "defaultStaleWhileRevalidate": 86400,
+      "staticAssetsTtl": 604800,
+      "cacheEverything": true,
+      "cacheTags": {
+        "enabled": true,
+        "prefix": "cdn-",
+        "defaultTags": ["cdn", "r2-objects"]
+      },
+      "objectTypeConfig": {
+        "image": {
+          "polish": "lossy",
+          "webp": true,
+          "maxAge": 86400,
+          "tags": ["images"]
+        },
+        "static": {
+          "maxAge": 604800,
+          "minify": {
+            "javascript": true,
+            "css": true,
+            "html": true
+          },
+          "tags": ["static"]
+        },
+        "document": {
+          "maxAge": 86400,
+          "tags": ["documents"]
+        },
+        "video": {
+          "maxAge": 604800,
+          "tags": ["media", "video"]
+        },
+        "audio": {
+          "maxAge": 604800,
+          "tags": ["media", "audio"]
+        }
+      },
+      "sensitiveTypes": ["private", "secure"]
+    },
+    
+    // Security settings
+    "SECURITY": {
+      "headers": {
+        "default": {
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "default-src 'none'"
+        },
+        "image": {
+          "Content-Security-Policy": "default-src 'none'; img-src 'self'"
+        },
+        "document": {
+          "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+        },
+        "font": {
+          "Content-Security-Policy": "default-src 'none'; font-src 'self'"
+        }
+      }
+    },
+    
+    // Environment flag (default, will be overridden by env-specific settings)
+    "ENVIRONMENT": "development"
+  },
+  
+  // Staging environment
+  "env": {
+    "staging": {
+      "name": "staging-r2-objects-worker",
+      "vars": { 
+        "ENVIRONMENT": "staging",
+        // Staging-specific overrides
+        "CACHE": {
+          // Just override the specific fields you want to change
+          "defaultMaxAge": 3600 // Shorter cache in staging
+        },
+        // Adding STORAGE to staging environment
+        "STORAGE": {
+          "maxRetries": 3,
+          "retryDelay": 1000,
+          "exponentialBackoff": true,
+          "defaultListLimit": 1000
+        },
+        // Adding SECURITY to staging environment
+        "SECURITY": {
+          "headers": {
+            "default": {
+              "X-Content-Type-Options": "nosniff",
+              "Content-Security-Policy": "default-src 'none'"
+            },
+            "image": {
+              "Content-Security-Policy": "default-src 'none'; img-src 'self'"
+            },
+            "document": {
+              "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+            },
+            "font": {
+              "Content-Security-Policy": "default-src 'none'; font-src 'self'"
+            }
+          }
+        }
+      },
+      "workers_dev": true,
+      "r2_buckets": [
+        { "binding": "IMAGES", "bucket_name": "images" }
+      ]
+    },
+    
+    // Production environment
+    "prod": {
+      "name": "prod-r2-objects-worker",
+      "vars": { 
+        "ENVIRONMENT": "production",
+        "STORAGE": {
+          "maxRetries": 3,
+          "retryDelay": 1000,
+          "exponentialBackoff": true,
+          "defaultListLimit": 1000
+        },
+        "CACHE": {
+          "defaultMaxAge": 86400,
+          "defaultStaleWhileRevalidate": 86400,
+          "staticAssetsTtl": 604800,
+          "cacheEverything": true,
+          "objectTypeConfig": {
+            "image": {
+              "polish": "lossy",
+              "webp": true,
+              "maxAge": 86400
+            },
+            "static": {
+              "maxAge": 604800,
+              "minify": {
+                "javascript": true,
+                "css": true,
+                "html": true
+              }
+            },
+            "document": {
+              "maxAge": 86400
+            },
+            "video": {
+              "maxAge": 604800
+            },
+            "audio": {
+              "maxAge": 604800
+            }
+          },
+          "sensitiveTypes": ["private", "secure"]
+        },
+        "SECURITY": {
+          "headers": {
+            "default": {
+              "X-Content-Type-Options": "nosniff",
+              "Content-Security-Policy": "default-src 'none'"
+            },
+            "image": {
+              "Content-Security-Policy": "default-src 'none'; img-src 'self'"
+            },
+            "document": {
+              "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+            },
+            "font": {
+              "Content-Security-Policy": "default-src 'none'; font-src 'self'"
+            }
+          }
+        }
+      },
+      "routes": [
+        { "pattern": "cdn.erfianugrah.com", "custom_domain": true }
+      ],
+      "r2_buckets": [
+        { "binding": "IMAGES", "bucket_name": "images" }
+      ]
+    }
+  }
+}
