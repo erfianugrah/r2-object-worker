@@ -1,5 +1,10 @@
 # R2 Objects Worker
 
+[![npm version](https://img.shields.io/npm/v/r2-objects-worker)](https://www.npmjs.com/package/r2-objects-worker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/erfi/r2-object-worker/test.yml?branch=main&label=tests)](https://github.com/erfi/r2-object-worker/actions)
+[![Deploy](https://img.shields.io/github/actions/workflow/status/erfi/r2-object-worker/deploy.yml?branch=main&label=deploy)](https://github.com/erfi/r2-object-worker/actions)
+
 A Cloudflare Worker for serving objects (images, documents, videos, etc.) from R2 buckets with proper caching, content type handling, and cache invalidation support.
 
 ## Features
@@ -216,4 +221,4 @@ The router can be extended to add custom request handling:
 
 ## License
 
-MIT
+[MIT](./LICENSE)
