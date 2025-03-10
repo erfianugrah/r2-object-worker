@@ -20,8 +20,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.92.0'
-          command: versions upload --experimental-versions --env prod --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
+          wranglerVersion: '3.112.0'
+          command: versions upload --env prod --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
 
       - name: List Versions
         id: list_versions
@@ -29,8 +29,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.92.0'
-          command: versions list --experimental-versions --env prod --json
+          wranglerVersion: '3.112.0'
+          command: versions list --env prod --json
 
       - name: Extract New Version ID
         id: extract_version
@@ -47,8 +47,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.92.0'
-          command: versions deploy ${{ steps.extract_version.outputs.new_version }}@100% --experimental-versions --env prod -y
+          wranglerVersion: '3.112.0'
+          command: versions deploy ${{ steps.extract_version.outputs.new_version }}@100% --env prod -y
 
       - name: Error if no valid version
         if: steps.extract_version.outputs.new_version == ''
