@@ -6,6 +6,9 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"observability": {
+		"enabled": true
+	},
 	// Development settings
 	"dev": {
 		"port": 9001,
