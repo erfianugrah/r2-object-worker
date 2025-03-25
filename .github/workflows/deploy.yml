@@ -16,20 +16,20 @@ jobs:
 
       - name: Upload New Version
         id: upload_version
-        uses: cloudflare/wrangler-action@v3.13.0
+        uses: cloudflare/wrangler-action@v3.14.1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.112.0'
+          wranglerVersion: '4.4.0'
           command: versions upload --env prod --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
 
       - name: List Versions
         id: list_versions
-        uses: cloudflare/wrangler-action@v3.13.0
+        uses: cloudflare/wrangler-action@v3.14.1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.112.0'
+          wranglerVersion: '4.4.0'
           command: versions list --env prod --json
 
       - name: Extract New Version ID
@@ -43,11 +43,11 @@ jobs:
 
       - name: Deploy New Version
         if: steps.extract_version.outputs.new_version != ''
-        uses: cloudflare/wrangler-action@v3.13.0
+        uses: cloudflare/wrangler-action@v3.14.1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.112.0'
+          wranglerVersion: '4.4.0'
           command: versions deploy ${{ steps.extract_version.outputs.new_version }}@100% --env prod -y
 
       - name: Error if no valid version
