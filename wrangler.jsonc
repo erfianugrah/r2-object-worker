@@ -24,6 +24,16 @@
 				"ENVIRONMENT": "development",
 				// R2 bucket binding configuration
 				"R2_BUCKET_BINDING": "R2",
+				// Logging configuration
+				"LOGGING": {
+					"level": "debug",
+					"pretty": true,
+					"breadcrumbs": true,
+					"redact": [
+						"headers.authorization",
+						"headers.cookie"
+					]
+				},
 				// Storage settings
 				"STORAGE": {
 					"maxRetries": 3,
@@ -36,6 +46,10 @@
 					// TTL in seconds for Cache-Control max-age
 					"defaultMaxAge": 86400, // 1 day
 					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache configuration
+					"cacheEnabled": true, // Global toggle to enable/disable caching
+					"bypassParamEnabled": true,
+					"bypassParamName": "no-cache",
 					// Cache tagging for cache invalidation via Cloudflare API
 					"cacheTags": {
 						"enabled": true,
@@ -119,6 +133,16 @@
 				"ENVIRONMENT": "staging",
 				// R2 bucket binding configuration
 				"R2_BUCKET_BINDING": "R2",
+				// Logging configuration
+				"LOGGING": {
+					"level": "info",
+					"pretty": false,
+					"breadcrumbs": true,
+					"redact": [
+						"headers.authorization",
+						"headers.cookie"
+					]
+				},
 				// Storage settings
 				"STORAGE": {
 					"maxRetries": 3,
@@ -131,6 +155,10 @@
 					// TTL in seconds for Cache-Control max-age (shorter in staging)
 					"defaultMaxAge": 3600, // 1 hour
 					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache configuration
+					"cacheEnabled": true, // Global toggle to enable/disable caching
+					"bypassParamEnabled": true,
+					"bypassParamName": "no-cache",
 					// Cache tagging for cache invalidation via Cloudflare API
 					"cacheTags": {
 						"enabled": true,
@@ -215,6 +243,17 @@
 				"ENVIRONMENT": "production",
 				// R2 bucket binding configuration
 				"R2_BUCKET_BINDING": "R2",
+				// Logging configuration
+				"LOGGING": {
+					"level": "debug",
+					"pretty": true,
+					"breadcrumbs": true,
+					"redact": [
+						"headers.authorization",
+						"headers.cookie",
+						"headers.x-api-key"
+					]
+				},
 				// Storage settings
 				"STORAGE": {
 					"maxRetries": 3,
@@ -227,6 +266,10 @@
 					// TTL in seconds for Cache-Control max-age
 					"defaultMaxAge": 86400, // 1 day
 					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache configuration
+					"cacheEnabled": true, // Global toggle to enable/disable caching
+					"bypassParamEnabled": true,
+					"bypassParamName": "no-cache",
 					// Cache tagging for cache invalidation via Cloudflare API
 					"cacheTags": {
 						"enabled": true,

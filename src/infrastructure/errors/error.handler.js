@@ -37,10 +37,19 @@ export class RangeNotSatisfiableError extends Error {
 /**
  * Global error handler
  */
-export function handleError(error) {
-  console.error("Error handling request:", error);
-
+export function handleError(error, request, logger) {
+  // Use the provided logger or fallback to console
+  const log = logger || console;
+  
+  // Create breadcrumb trail based on error type
+  const breadcrumb = ['error', error.name || 'unknown_error'];
+  
   if (error instanceof ValidationError) {
+    log.warn("Validation error handling request:", {
+      error: error.message,
+      statusCode: error.statusCode,
+    }, breadcrumb);
+    
     return new Response(error.message, {
       status: error.statusCode,
       headers: { "Content-Type": "text/plain" },
@@ -48,6 +57,12 @@ export function handleError(error) {
   }
 
   if (error instanceof MethodNotAllowedError) {
+    log.warn("Method not allowed error:", {
+      error: error.message,
+      statusCode: error.statusCode,
+      allowedMethods: error.allowedMethods
+    }, breadcrumb);
+    
     return new Response(error.message, {
       status: error.statusCode,
       headers: {
@@ -58,6 +73,12 @@ export function handleError(error) {
   }
 
   if (error instanceof NotFoundError) {
+    log.warn("Resource not found error:", {
+      error: error.message,
+      statusCode: error.statusCode,
+      url: request?.url
+    }, breadcrumb);
+    
     return new Response(error.message, {
       status: error.statusCode,
       headers: { "Content-Type": "text/plain" },
@@ -65,6 +86,11 @@ export function handleError(error) {
   }
 
   if (error instanceof RangeNotSatisfiableError) {
+    log.warn("Range not satisfiable error:", {
+      error: error.message,
+      statusCode: error.statusCode,
+    }, breadcrumb);
+    
     return new Response(error.message, {
       status: error.statusCode,
       headers: { "Content-Type": "text/plain" },
@@ -72,7 +98,16 @@ export function handleError(error) {
   }
 
   // Handle any unexpected errors
-  console.error("Unexpected error:", error.stack || error);
+  log.error("Unexpected error:", {
+    error: {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    },
+    url: request?.url,
+    method: request?.method
+  }, [...breadcrumb, 'server_error']);
+  
   return new Response("Internal Server Error", {
     status: 500,
     headers: { "Content-Type": "text/plain" },

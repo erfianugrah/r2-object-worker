@@ -39,6 +39,9 @@ export class Config {
       defaultStaleWhileRevalidate: 86400,
       staticAssetsTtl: 604800, // 7 days in seconds
       cacheEverything: true,
+      cacheEnabled: true, // Global toggle to enable/disable caching
+      bypassParamEnabled: true,
+      bypassParamName: 'no-cache',
       cacheTags: {
         enabled: true,
         prefix: 'cdn-',
