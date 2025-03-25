@@ -23,6 +23,7 @@ A Cloudflare Worker for serving objects (images, documents, videos, etc.) from R
 - Domain-driven design architecture
 - Centralized error handling
 - Retry logic with exponential backoff for R2 operations
+- Comprehensive logging with Pino
 
 ## Architecture
 
@@ -136,6 +137,18 @@ All configuration is managed through `wrangler.jsonc`. The configuration is stru
 
 All configuration can be overridden using environment variables at runtime. The Config class will prioritize values from the environment over the defaults in wrangler.jsonc.
 
+## Logging
+
+The application implements comprehensive logging using Pino:
+
+- Log levels configurable by environment
+- Request ID and trace ID tracking
+- Breadcrumb trails for tracking request flow
+- Performance metrics logging
+- Redaction of sensitive information
+- Structured logging format for easy querying
+- Pretty printing in development mode
+
 ## Error Handling
 
 The application implements centralized error handling:
@@ -144,31 +157,6 @@ The application implements centralized error handling:
 - Automatic error response formatting
 - Error logging and monitoring support
 - Different error responses based on error type
-
-## Development
-
-### Prerequisites
-
-- Node.js 16+
-- npm or yarn
-- Wrangler CLI (`npm install -g wrangler`)
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Configure wrangler.jsonc with your settings
-4. Run the development server: `npm run dev`
-
-### Testing
-
-- Run tests: `npm test`
-- Run tests in watch mode: `npm run test:watch`
-
-## Deployment
-
-- Deploy to staging: `npm run deploy:staging`
-- Deploy to production: `npm run deploy:prod`
 
 ## API Endpoints
 
@@ -221,6 +209,31 @@ The worker implements several performance optimizations:
 6. **Cache Tags**: Granular cache invalidation
 7. **Retry Logic**: Automatic retries with exponential backoff
 
+## Development
+
+### Prerequisites
+
+- Node.js 16+
+- npm or yarn
+- Wrangler CLI (`npm install -g wrangler`)
+
+### Setup
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Configure wrangler.jsonc with your settings
+4. Run the development server: `npm run dev`
+
+### Testing
+
+- Run tests: `npm test`
+- Run tests in watch mode: `npm run test:watch`
+
+## Deployment
+
+- Deploy to staging: `npm run deploy:staging`
+- Deploy to production: `npm run deploy:prod`
+
 ## Extending the Worker
 
 ### Adding New Object Types
@@ -239,6 +252,29 @@ The router can be extended to add custom request handling:
 1. Add a new pattern in the router
 2. Create a new controller, service, and repository if needed
 3. Update the router to use the new components
+
+## Recent Changes
+
+### Added Pino Logging
+- Comprehensive structured logging system
+- Request tracing with IDs
+- Performance metrics
+- Log levels configurable by environment
+
+### Improved Error Handling
+- Custom error classes with HTTP status codes
+- Centralized error handling
+- Detailed error logging
+
+### Enhanced Caching
+- Added advanced caching strategies
+- Support for cache tags
+- Improved cache control headers
+
+### Updated Router
+- Pattern-based routing
+- Method filtering
+- Improved request handling
 
 ## License
 
