@@ -11,10 +11,14 @@
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
+	"dependencies": {
+		"pino": "^8.17.2"
+	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.1.0",
 		"@testing-library/dom": "^10.4.0",
 		"@testing-library/jest-dom": "^6.6.3",
+		"pino-pretty": "^10.3.1",
 		"vitest": "1.3.0",
 		"wrangler": "^3.112.0"
 	}
