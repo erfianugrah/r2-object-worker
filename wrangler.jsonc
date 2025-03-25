@@ -1,6 +1,6 @@
 {
 	// Basic configuration
-	"name": "r2-objects-worker", // Updated name to reflect the new purpose
+	"name": "r2-objects-worker",
 	"main": "src/index.js",
 	"compatibility_date": "2023-03-01",
 	"compatibility_flags": [
@@ -15,118 +15,173 @@
 		"local_protocol": "http",
 		"upstream_protocol": "https"
 	},
-	// Worker configuration values - defined at top-level and can be overridden in environments
-	"vars": {
-		// R2 bucket binding configuration
-		"R2_BUCKET_BINDING": "R2",
-		// Storage settings
-		"STORAGE": {
-			"maxRetries": 3,
-			"retryDelay": 1000,
-			"exponentialBackoff": true,
-			"defaultListLimit": 1000
-		},
-		// Cache settings
-		"CACHE": {
-			"defaultMaxAge": 86400,
-			"defaultStaleWhileRevalidate": 86400,
-			"staticAssetsTtl": 604800,
-			"cacheEverything": true,
-			"cacheTags": {
-				"enabled": true,
-				"prefix": "cdn-",
-				"defaultTags": [
-					"cdn",
-					"r2-objects"
-				]
-			},
-			"objectTypeConfig": {
-				"image": {
-					"polish": "lossy",
-					"webp": true,
-					"maxAge": 86400,
-					"tags": [
-						"images"
-					]
-				},
-				"static": {
-					"maxAge": 604800,
-					"minify": {
-						"javascript": true,
-						"css": true,
-						"html": true
-					},
-					"tags": [
-						"static"
-					]
-				},
-				"document": {
-					"maxAge": 86400,
-					"tags": [
-						"documents"
-					]
-				},
-				"video": {
-					"maxAge": 604800,
-					"tags": [
-						"media",
-						"video"
-					]
-				},
-				"audio": {
-					"maxAge": 604800,
-					"tags": [
-						"media",
-						"audio"
-					]
-				}
-			},
-			"sensitiveTypes": [
-				"private",
-				"secure"
-			]
-		},
-		// Security settings
-		"SECURITY": {
-			"headers": {
-				"default": {
-					"X-Content-Type-Options": "nosniff",
-					"Content-Security-Policy": "default-src 'none'"
-				},
-				"image": {
-					"Content-Security-Policy": "default-src 'none'; img-src 'self'"
-				},
-				"document": {
-					"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
-				},
-				"font": {
-					"Content-Security-Policy": "default-src 'none'; font-src 'self'"
-				}
-			}
-		},
-		// Environment flag (default, will be overridden by env-specific settings)
-		"ENVIRONMENT": "development"
-	},
-	// Staging environment
+	// Environment-specific configurations
 	"env": {
-		"staging": {
-			"name": "staging-r2-objects-worker",
+		// Development environment (default)
+		"development": {
+			"name": "dev-r2-objects-worker",
 			"vars": {
-				"ENVIRONMENT": "staging",
+				"ENVIRONMENT": "development",
+				// R2 bucket binding configuration
 				"R2_BUCKET_BINDING": "R2",
-				// Staging-specific overrides
-				"CACHE": {
-					// Just override the specific fields you want to change
-					"defaultMaxAge": 3600 // Shorter cache in staging
-				},
-				// Adding STORAGE to staging environment
+				// Storage settings
 				"STORAGE": {
 					"maxRetries": 3,
 					"retryDelay": 1000,
 					"exponentialBackoff": true,
 					"defaultListLimit": 1000
 				},
-				// Adding SECURITY to staging environment
+				// Cache settings - used for Cache API and Cache-Control headers
+				"CACHE": {
+					// TTL in seconds for Cache-Control max-age
+					"defaultMaxAge": 86400, // 1 day
+					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache tagging for cache invalidation via Cloudflare API
+					"cacheTags": {
+						"enabled": true,
+						"prefix": "cdn-",
+						"defaultTags": [
+							"cdn",
+							"r2-objects"
+						]
+					},
+					// Content-type specific cache configuration
+					"objectTypeConfig": {
+						"image": {
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"images"
+							]
+						},
+						"static": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"static"
+							]
+						},
+						"document": {
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"documents"
+							]
+						},
+						"video": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"video"
+							]
+						},
+						"audio": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"audio"
+							]
+						}
+					},
+					// Types that should never be cached
+					"sensitiveTypes": [
+						"private",
+						"secure"
+					]
+				},
+				// Security settings
+				"SECURITY": {
+					"headers": {
+						"default": {
+							"X-Content-Type-Options": "nosniff",
+							"Content-Security-Policy": "default-src 'none'"
+						},
+						"image": {
+							"Content-Security-Policy": "default-src 'none'; img-src 'self'"
+						},
+						"document": {
+							"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+						},
+						"font": {
+							"Content-Security-Policy": "default-src 'none'; font-src 'self'"
+						}
+					}
+				}
+			},
+			"r2_buckets": [
+				{
+					"binding": "R2",
+					"bucket_name": "images-dev"
+				}
+			]
+		},
+		// Staging environment
+		"staging": {
+			"name": "staging-r2-objects-worker",
+			"vars": {
+				"ENVIRONMENT": "staging",
+				// R2 bucket binding configuration
+				"R2_BUCKET_BINDING": "R2",
+				// Storage settings
+				"STORAGE": {
+					"maxRetries": 3,
+					"retryDelay": 1000,
+					"exponentialBackoff": true,
+					"defaultListLimit": 1000
+				},
+				// Cache settings - used for Cache API and Cache-Control headers
+				"CACHE": {
+					// TTL in seconds for Cache-Control max-age (shorter in staging)
+					"defaultMaxAge": 3600, // 1 hour
+					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache tagging for cache invalidation via Cloudflare API
+					"cacheTags": {
+						"enabled": true,
+						"prefix": "cdn-",
+						"defaultTags": [
+							"cdn",
+							"r2-objects"
+						]
+					},
+					// Content-type specific cache configuration
+					"objectTypeConfig": {
+						"image": {
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"images"
+							]
+						},
+						"static": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"static"
+							]
+						},
+						"document": {
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"documents"
+							]
+						},
+						"video": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"video"
+							]
+						},
+						"audio": {
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"audio"
+							]
+						}
+					},
+					// Types that should never be cached
+					"sensitiveTypes": [
+						"private",
+						"secure"
+					]
+				},
+				// Security settings
 				"SECURITY": {
 					"headers": {
 						"default": {
@@ -158,47 +213,71 @@
 			"name": "prod-r2-objects-worker",
 			"vars": {
 				"ENVIRONMENT": "production",
+				// R2 bucket binding configuration
 				"R2_BUCKET_BINDING": "R2",
+				// Storage settings
 				"STORAGE": {
 					"maxRetries": 3,
 					"retryDelay": 1000,
 					"exponentialBackoff": true,
 					"defaultListLimit": 1000
 				},
+				// Cache settings - used for Cache API and Cache-Control headers
 				"CACHE": {
-					"defaultMaxAge": 86400,
-					"defaultStaleWhileRevalidate": 86400,
-					"staticAssetsTtl": 604800,
-					"cacheEverything": true,
+					// TTL in seconds for Cache-Control max-age
+					"defaultMaxAge": 86400, // 1 day
+					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache tagging for cache invalidation via Cloudflare API
+					"cacheTags": {
+						"enabled": true,
+						"prefix": "cdn-",
+						"defaultTags": [
+							"cdn",
+							"r2-objects"
+						]
+					},
+					// Content-type specific cache configuration
 					"objectTypeConfig": {
 						"image": {
-							"polish": "lossy",
-							"webp": true,
-							"maxAge": 86400
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"images"
+							]
 						},
 						"static": {
-							"maxAge": 604800,
-							"minify": {
-								"javascript": true,
-								"css": true,
-								"html": true
-							}
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"static"
+							]
 						},
 						"document": {
-							"maxAge": 86400
+							"maxAge": 86400, // 1 day
+							"tags": [
+								"documents"
+							]
 						},
 						"video": {
-							"maxAge": 604800
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"video"
+							]
 						},
 						"audio": {
-							"maxAge": 604800
+							"maxAge": 604800, // 7 days
+							"tags": [
+								"media",
+								"audio"
+							]
 						}
 					},
+					// Types that should never be cached
 					"sensitiveTypes": [
 						"private",
 						"secure"
 					]
 				},
+				// Security settings
 				"SECURITY": {
 					"headers": {
 						"default": {

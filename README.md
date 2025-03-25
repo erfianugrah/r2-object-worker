@@ -177,6 +177,21 @@ The application implements centralized error handling:
 - `GET /_list?prefix=<prefix>&limit=<limit>` - List objects with optional prefix and limit
 - `GET /<key>` - Retrieve object by key with appropriate content type and caching
 
+## Custom Cache Tags
+
+You can add custom cache tags to objects by including them in the URL query parameter:
+
+```
+GET /images/photo.jpg?tags=product-123,promo-summer
+```
+
+This adds the specified tags to the Cloudflare cache entry, allowing you to purge specific items by tag later. Custom tags appear in both the Cache-Tag response header and the cf.cacheTags object.
+
+Tags are applied in three levels:
+1. Default tags from configuration (e.g., "cdn", "r2-objects")
+2. Object-type specific tags (e.g., "images" for image files)
+3. Custom tags provided in the URL query parameter
+
 ## Cache Invalidation
 
 Objects can be purged from the cache using Cloudflare's cache purge API, targeting specific cache tags:
@@ -185,8 +200,14 @@ Objects can be purged from the cache using Cloudflare's cache purge API, targeti
 curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
      -H "Authorization: Bearer {api_token}" \
      -H "Content-Type: application/json" \
-     --data '{"tags":["cdn-images","cdn-type-image"]}'
+     --data '{"tags":["cdn-images","cdn-type-image","product-123"]}'
 ```
+
+Examples of tags you can use for purging:
+- `cdn-images` - Purge all image files
+- `cdn-type-video` - Purge all video files
+- `product-123` - Purge a specific product image that had this custom tag
+- `promo-summer` - Purge all assets related to a summer promotion
 
 ## Performance Considerations
 

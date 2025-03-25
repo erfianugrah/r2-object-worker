@@ -16,14 +16,24 @@ export class ObjectController {
   async handleObjectRequest(request, url) {
     const key = url.pathname.slice(1);
     
+    // Extract custom tags from query parameters if provided
+    const customTags = url.searchParams.get("tags") ? 
+      url.searchParams.get("tags").split(",") : 
+      [];
+    
     // Create a cacheable request if it's GET method
     let cachableRequest = request;
     if (request.method === "GET") {
       const objectType = ContentTypeUtils.getObjectTypeFromKey(key);
-      cachableRequest = CacheUtils.createCacheableRequest(request, { objectType }, this.config);
+      // Using createCacheableRequest with support for custom tags
+      cachableRequest = CacheUtils.createCacheableRequest(
+        request, 
+        { objectType, customTags }, 
+        this.config
+      );
     }
     
-    return await this.objectService.getObject(key, cachableRequest);
+    return await this.objectService.getObject(key, cachableRequest, { customTags });
   }
 
   /**

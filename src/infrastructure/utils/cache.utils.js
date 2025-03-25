@@ -3,27 +3,24 @@
  */
 export class CacheUtils {
   /**
-   * Create a cacheable request with appropriate CF properties
+   * Create a cacheable request that only sets cache tags
    */
   static createCacheableRequest(request, options = {}, config) {
-    const cacheConfig = config.getCacheConfig();
-    const { objectType } = options;
-    const cacheTtl = options.cacheTtl || cacheConfig.defaultMaxAge;
-    const cacheEverything = options.cacheEverything !== undefined ? 
-      options.cacheEverything : cacheConfig.cacheEverything;
+    const { objectType, customTags } = options;
     
-    // Clone the request and add CF-specific cache properties
+    // Generate cache tags using our utility method
+    const tags = this.generateCacheTags(objectType, config);
+    
+    // Add any custom tags provided in the options
+    if (customTags && Array.isArray(customTags) && customTags.length > 0) {
+      tags.push(...customTags);
+    }
+    
+    // Return request with only cacheTags in cf object
     return new Request(request.url, {
       method: request.method,
       headers: request.headers,
-      cf: {
-        // Cache everything option enables caching for all file types
-        cacheEverything,
-        // Set the TTL for the cache
-        cacheTtl,
-        // Cache based on content type if specified
-        ...(objectType && this.getObjectSpecificCacheConfig(objectType, config))
-      }
+      cf: tags.length > 0 ? { cacheTags: tags } : undefined
     });
   }
 
@@ -32,7 +29,7 @@ export class CacheUtils {
    */
   static addCacheHeaders(response, options = {}, config) {
     const cacheConfig = config.getCacheConfig();
-    const { objectType } = options;
+    const { objectType, customTags } = options;
     
     // Get object-specific cache config or use defaults
     const objectTypeConfig = config.getObjectTypeCacheConfig(objectType) || {};
@@ -55,8 +52,20 @@ export class CacheUtils {
     // Set Vary header for proper cache differentiation
     headers.set('Vary', 'Accept-Encoding');
     
-    // Add cache tags if enabled
+    // Add cache tags to the response headers for visibility and debugging
+    // This helps users see what tags are associated with a response
     this.addCacheTags(headers, objectType, config);
+    
+    // Add any custom tags provided in the options
+    if (customTags && Array.isArray(customTags) && customTags.length > 0) {
+      const existingTags = headers.get('Cache-Tag') || '';
+      const separator = existingTags ? ',' : '';
+      const newTagsValue = existingTags + separator + customTags.join(',');
+      
+      // Set both the standard Cache-Tag and the custom X-Cache-Tags header
+      headers.set('Cache-Tag', newTagsValue);
+      headers.set('X-Cache-Tags', newTagsValue);
+    }
     
     // Add security headers based on object type
     const securityHeaders = config.getObjectTypeSecurityHeaders(objectType);
@@ -73,7 +82,8 @@ export class CacheUtils {
   }
   
   /**
-   * Add cache tags to the response
+   * Add cache tags to the response headers for visibility and debugging
+   * Cache tags are set in both cf.cacheTags and response headers
    */
   static addCacheTags(headers, objectType, config) {
     const cacheConfig = config.getCacheConfig();
@@ -84,6 +94,25 @@ export class CacheUtils {
       return;
     }
     
+    const tags = this.generateCacheTags(objectType, config);
+    
+    // Set the Cache-Tag header if we have tags
+    if (tags.length > 0) {
+      // Set the visible Cache-Tag header for debugging and user visibility
+      headers.set('Cache-Tag', tags.join(','));
+      
+      // Add a custom header that won't be stripped by Cloudflare
+      headers.set('X-Cache-Tags', tags.join(','));
+    }
+  }
+  
+  /**
+   * Generate an array of cache tags based on config and object type
+   */
+  static generateCacheTags(objectType, config) {
+    const cacheConfig = config.getCacheConfig();
+    const cacheTagConfig = cacheConfig.cacheTags || {};
+    
     const tags = [];
     const prefix = cacheTagConfig.prefix || '';
     
@@ -93,24 +122,23 @@ export class CacheUtils {
     }
     
     // Add object type specific tags
-    const objectTypeConfig = config.getObjectTypeCacheConfig(objectType) || {};
-    if (objectTypeConfig.tags && Array.isArray(objectTypeConfig.tags)) {
-      tags.push(...objectTypeConfig.tags.map(tag => `${prefix}${tag}`));
-    }
-    
-    // Add the object type itself as a tag
     if (objectType) {
+      const objectTypeConfig = config.getObjectTypeCacheConfig(objectType) || {};
+      if (objectTypeConfig.tags && Array.isArray(objectTypeConfig.tags)) {
+        tags.push(...objectTypeConfig.tags.map(tag => `${prefix}${tag}`));
+      }
+      
+      // Add the object type itself as a tag
       tags.push(`${prefix}type-${objectType}`);
     }
     
-    // Set the Cache-Tag header if we have tags
-    if (tags.length > 0) {
-      headers.set('Cache-Tag', tags.join(','));
-    }
+    // Add any custom tags from options if provided in future
+    return tags;
   }
 
   /**
    * Get content-specific cache configuration 
+   * Note: Only used for cache tags with Cache API, not for CF object caching
    */
   static getObjectSpecificCacheConfig(objectType, config) {
     return config.getObjectTypeCacheConfig(objectType);

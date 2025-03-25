@@ -13,10 +13,13 @@ export class ObjectService {
   /**
    * Get object with appropriate headers
    */
-  async getObject(key, request) {
+  async getObject(key, request, options = {}) {
     // Create a cacheable request to enable CF caching
     const cacheKey = new URL(request.url);
     const cacheRequest = new Request(cacheKey, request);
+    
+    // Extract custom tags from options
+    const { customTags } = options;
     
     // Check if we have the response in the cache
     const cache = caches.default;
@@ -42,8 +45,8 @@ export class ObjectService {
     // Create the response
     response = new Response(object.body, { headers });
     
-    // Add cache and security headers
-    response = CacheUtils.addCacheHeaders(response, { objectType }, this.config);
+    // Add cache and security headers (including custom tags)
+    response = CacheUtils.addCacheHeaders(response, { objectType, customTags }, this.config);
     
     // Cache the response for future requests
     await cache.put(cacheRequest, response.clone());
