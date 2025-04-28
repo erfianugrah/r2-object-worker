@@ -121,48 +121,80 @@ export class ObjectService {
         // Add cache and security headers (including custom tags)
         response = CacheUtils.addCacheHeaders(response, { objectType, customTags }, this.config);
         
-        // Cache the response for future requests - with timing
-        const cacheStoreStart = Date.now();
-        requestLogger.debug(`Storing response in cache`, {
-          objectType,
-          contentType,
-          cacheKey: cacheKey.toString(),
-          startTime: cacheStoreStart
-        }, ['request_start', 'r2_fetch_complete', 'cache_store_start']);
+        // Define a size limit for using the Cache API (100MB)
+        const MAX_CACHE_API_SIZE_BYTES = 100 * 1024 * 1024;
         
-        const cache = caches.default;
-        await cache.put(cacheRequest, response.clone());
-        
-        // Log cache store metrics
-        const cacheStoreDuration = Date.now() - cacheStoreStart; 
-        this.logger.logCacheEvent(key, 'STORE', {
-          size: object.size,
-          type: contentType,
-          objectType,
-          startTime: cacheStoreStart,
-          duration: cacheStoreDuration,
-          maxAge: this.config.getObjectTypeCacheConfig(objectType)?.maxAge || this.config.getCacheConfig().defaultMaxAge
-        }, ['request_start', 'r2_fetch_complete', 'cache_store_start', 'cache_store_complete']);
-        
-        // Set cache status to MISS since we had to fetch from R2
-        const responseHeaders = new Headers(response.headers);
-        responseHeaders.set("X-Cache-Status", "MISS");
-        response = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: responseHeaders
-        });
-        
-        // Log request completion metrics
-        this.logger.logRequestCompletion(requestLogger, response, {
-          key,
-          objectType,
-          cacheStatus: 'MISS',
-          r2FetchTime: fetchDuration,
-          cacheStoreTime: cacheStoreDuration,
-          size: object.size,
-          startTime: requestLogger.startTime
-        });
+        // Check if the object exceeds the size limit for cache.put()
+        if (object.size >= MAX_CACHE_API_SIZE_BYTES) {
+          // Skip cache.put for large files to avoid ReadableStream.tee() buffer limit errors
+          requestLogger.info(`Skipping Cache API store for large file: ${key}`, {
+            size: object.size,
+            sizeInMB: Math.round(object.size / (1024 * 1024)),
+            maxSizeInMB: Math.round(MAX_CACHE_API_SIZE_BYTES / (1024 * 1024))
+          }, ['request_start', 'r2_fetch_complete', 'cache_skip_large_file']);
+          
+          // Update headers to indicate skipped cache
+          const responseHeaders = new Headers(response.headers);
+          responseHeaders.set("X-Cache-Status", "MISS (Too Large for Cache API)");
+          response = new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+          });
+          
+          // Log request completion metrics for large files (skip cacheStoreTime)
+          this.logger.logRequestCompletion(requestLogger, response, {
+            key,
+            objectType,
+            cacheStatus: 'MISS_LARGE_FILE',
+            r2FetchTime: fetchDuration,
+            size: object.size,
+            startTime: requestLogger.startTime
+          });
+        } else {
+          // Continue with normal caching for smaller files
+          const cacheStoreStart = Date.now();
+          requestLogger.debug(`Storing response in cache`, {
+            objectType,
+            contentType,
+            cacheKey: cacheKey.toString(),
+            startTime: cacheStoreStart
+          }, ['request_start', 'r2_fetch_complete', 'cache_store_start']);
+          
+          const cache = caches.default;
+          await cache.put(cacheRequest, response.clone());
+          
+          // Log cache store metrics
+          const cacheStoreDuration = Date.now() - cacheStoreStart; 
+          this.logger.logCacheEvent(key, 'STORE', {
+            size: object.size,
+            type: contentType,
+            objectType,
+            startTime: cacheStoreStart,
+            duration: cacheStoreDuration,
+            maxAge: this.config.getObjectTypeCacheConfig(objectType)?.maxAge || this.config.getCacheConfig().defaultMaxAge
+          }, ['request_start', 'r2_fetch_complete', 'cache_store_start', 'cache_store_complete']);
+          
+          // Set cache status to MISS since we had to fetch from R2
+          const responseHeaders = new Headers(response.headers);
+          responseHeaders.set("X-Cache-Status", "MISS");
+          response = new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+          });
+          
+          // Log request completion metrics
+          this.logger.logRequestCompletion(requestLogger, response, {
+            key,
+            objectType,
+            cacheStatus: 'MISS',
+            r2FetchTime: fetchDuration,
+            cacheStoreTime: cacheStoreDuration,
+            size: object.size,
+            startTime: requestLogger.startTime
+          });
+        }
       } else {
         // Set cache status
         const responseHeaders = new Headers(response.headers);

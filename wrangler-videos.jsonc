@@ -1,0 +1,136 @@
+{
+	// Basic configuration
+	"name": "r2-objects-worker",
+	"main": "src/index.js",
+	"compatibility_date": "2023-03-01", // Consider updating to a more recent date
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	// Development settings
+	"dev": {
+		"port": 9001,
+		"local_protocol": "http",
+		"upstream_protocol": "https"
+	},
+	// Environment-specific configurations
+	"env": {
+		// Production environment
+		"prod": {
+			"name": "prod-r2-objects-worker",
+			"vars": {
+				"ENVIRONMENT": "production",
+				// R2 bucket binding configuration
+				"R2_BUCKET_BINDING": "R2", // MODIFIED
+				// Logging configuration
+				"LOGGING": {
+					"level": "info", // MODIFIED prod level to info
+					"pretty": false, // MODIFIED prod pretty to false
+					"breadcrumbs": true,
+					"redact": [
+						"headers.authorization",
+						"headers.cookie",
+						"headers.x-api-key"
+					]
+				},
+				// Storage settings
+				"STORAGE": {
+					"maxRetries": 5, // MODIFIED (Example prod setting)
+					"retryDelay": 1500, // MODIFIED (Example prod setting)
+					"exponentialBackoff": true,
+					"defaultListLimit": 1000
+				},
+				// Cache settings - used for Cache API and Cache-Control headers
+				"CACHE": {
+					// TTL in seconds for Cache-Control max-age
+					"defaultMaxAge": 86400, // 1 day
+					"defaultStaleWhileRevalidate": 86400, // 1 day
+					// Cache configuration
+					"cacheEnabled": true, // Global toggle to enable/disable caching
+					"bypassParamEnabled": false, // MODIFIED (Disable bypass in prod?)
+					"bypassParamName": "no-cache",
+					// Cache tagging for cache invalidation via Cloudflare API
+					"cacheTags": {
+						"enabled": true,
+						"prefix": "cdn-prod-", // MODIFIED prefix for clarity
+						"defaultTags": [
+							"cdn",
+							"r2-objects",
+							"prod" // MODIFIED tag for clarity
+						]
+					},
+					// Content-type specific cache configuration (Using defaults from base)
+					"objectTypeConfig": {
+						"image": {
+							"maxAge": 86400,
+							"tags": [
+								"images"
+							]
+						},
+						"static": {
+							"maxAge": 604800,
+							"tags": [
+								"static"
+							]
+						},
+						"document": {
+							"maxAge": 86400,
+							"tags": [
+								"documents"
+							]
+						},
+						"video": {
+							"maxAge": 604800,
+							"tags": [
+								"media",
+								"video"
+							]
+						},
+						"audio": {
+							"maxAge": 604800,
+							"tags": [
+								"media",
+								"audio"
+							]
+						}
+					},
+					// Types that should never be cached
+					"sensitiveTypes": [
+						"private",
+						"secure"
+					]
+				},
+				// Security settings (Using defaults from base)
+				"SECURITY": {
+					"headers": {
+						"default": {
+							"X-Content-Type-Options": "nosniff",
+							"Content-Security-Policy": "default-src 'none'"
+						},
+						"image": {
+							"Content-Security-Policy": "default-src 'none'; img-src 'self'"
+						},
+						"document": {
+							"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+						},
+						"font": {
+							"Content-Security-Policy": "default-src 'none'; font-src 'self'"
+						}
+					}
+				}
+			},
+			"route": {
+				"pattern": "videos.erfi.dev",
+				"zone_id": "d6260a9cd0c27db1e9c0a453b2e4761e"
+			},
+			"r2_buckets": [
+				{
+					"binding": "videos", // MODIFIED - Must match R2_BUCKET_BINDING value
+					"bucket_name": "videos" // MODIFIED (Example name, replace with your actual prod bucket)
+				}
+			]
+		}
+	}
+}
