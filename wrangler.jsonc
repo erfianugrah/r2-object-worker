@@ -1,356 +1,78 @@
 {
-	// Basic configuration
-	"name": "r2-objects-worker",
-	"main": "src/index.js",
-	"compatibility_date": "2023-03-01",
+	"name": "prod-r2-objects-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-01",
 	"compatibility_flags": [
-		"nodejs_compat"
+		"nodejs_compat",
+		"cache_api_compat_flags",
+		"cache_api_request_cf_overrides_cache_rules"
 	],
 	"observability": {
 		"enabled": true
 	},
-	// Development settings
+	"logpush": true,
 	"dev": {
 		"port": 9001,
 		"local_protocol": "http",
 		"upstream_protocol": "https"
 	},
-	// Environment-specific configurations
-	"env": {
-		// Development environment (default)
-		"development": {
-			"name": "dev-r2-objects-worker",
-			"vars": {
-				"ENVIRONMENT": "development",
-				// R2 bucket binding configuration
-				"R2_BUCKET_BINDING": "R2",
-				// Logging configuration
-				"LOGGING": {
-					"level": "debug",
-					"pretty": true,
-					"breadcrumbs": true,
-					"redact": [
-						"headers.authorization",
-						"headers.cookie"
-					]
-				},
-				// Storage settings
-				"STORAGE": {
-					"maxRetries": 3,
-					"retryDelay": 1000,
-					"exponentialBackoff": true,
-					"defaultListLimit": 1000
-				},
-				// Cache settings - used for Cache API and Cache-Control headers
-				"CACHE": {
-					// TTL in seconds for Cache-Control max-age
-					"defaultMaxAge": 86400, // 1 day
-					"defaultStaleWhileRevalidate": 86400, // 1 day
-					// Cache configuration
-					"cacheEnabled": true, // Global toggle to enable/disable caching
-					"bypassParamEnabled": true,
-					"bypassParamName": "no-cache",
-					// Cache tagging for cache invalidation via Cloudflare API
-					"cacheTags": {
-						"enabled": true,
-						"prefix": "cdn-",
-						"defaultTags": [
-							"cdn",
-							"r2-objects"
-						]
-					},
-					// Content-type specific cache configuration
-					"objectTypeConfig": {
-						"image": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"images"
-							]
-						},
-						"static": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"static"
-							]
-						},
-						"document": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"documents"
-							]
-						},
-						"video": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"video"
-							]
-						},
-						"audio": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"audio"
-							]
-						}
-					},
-					// Types that should never be cached
-					"sensitiveTypes": [
-						"private",
-						"secure"
-					]
-				},
-				// Security settings
-				"SECURITY": {
-					"headers": {
-						"default": {
-							"X-Content-Type-Options": "nosniff",
-							"Content-Security-Policy": "default-src 'none'"
-						},
-						"image": {
-							"Content-Security-Policy": "default-src 'none'; img-src 'self'"
-						},
-						"document": {
-							"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
-						},
-						"font": {
-							"Content-Security-Policy": "default-src 'none'; font-src 'self'"
-						}
-					}
-				}
-			},
-			"r2_buckets": [
-				{
-					"binding": "R2",
-					"bucket_name": "images-dev"
-				}
-			]
-		},
-		// Staging environment
-		"staging": {
-			"name": "staging-r2-objects-worker",
-			"vars": {
-				"ENVIRONMENT": "staging",
-				// R2 bucket binding configuration
-				"R2_BUCKET_BINDING": "R2",
-				// Logging configuration
-				"LOGGING": {
-					"level": "info",
-					"pretty": false,
-					"breadcrumbs": true,
-					"redact": [
-						"headers.authorization",
-						"headers.cookie"
-					]
-				},
-				// Storage settings
-				"STORAGE": {
-					"maxRetries": 3,
-					"retryDelay": 1000,
-					"exponentialBackoff": true,
-					"defaultListLimit": 1000
-				},
-				// Cache settings - used for Cache API and Cache-Control headers
-				"CACHE": {
-					// TTL in seconds for Cache-Control max-age (shorter in staging)
-					"defaultMaxAge": 3600, // 1 hour
-					"defaultStaleWhileRevalidate": 86400, // 1 day
-					// Cache configuration
-					"cacheEnabled": true, // Global toggle to enable/disable caching
-					"bypassParamEnabled": true,
-					"bypassParamName": "no-cache",
-					// Cache tagging for cache invalidation via Cloudflare API
-					"cacheTags": {
-						"enabled": true,
-						"prefix": "cdn-",
-						"defaultTags": [
-							"cdn",
-							"r2-objects"
-						]
-					},
-					// Content-type specific cache configuration
-					"objectTypeConfig": {
-						"image": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"images"
-							]
-						},
-						"static": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"static"
-							]
-						},
-						"document": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"documents"
-							]
-						},
-						"video": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"video"
-							]
-						},
-						"audio": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"audio"
-							]
-						}
-					},
-					// Types that should never be cached
-					"sensitiveTypes": [
-						"private",
-						"secure"
-					]
-				},
-				// Security settings
-				"SECURITY": {
-					"headers": {
-						"default": {
-							"X-Content-Type-Options": "nosniff",
-							"Content-Security-Policy": "default-src 'none'"
-						},
-						"image": {
-							"Content-Security-Policy": "default-src 'none'; img-src 'self'"
-						},
-						"document": {
-							"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
-						},
-						"font": {
-							"Content-Security-Policy": "default-src 'none'; font-src 'self'"
-						}
-					}
-				}
-			},
-			"workers_dev": true,
-			"r2_buckets": [
-				{
-					"binding": "R2",
-					"bucket_name": "images"
-				}
-			]
-		},
-		// Production environment
-		"prod": {
-			"name": "prod-r2-objects-worker",
-			"vars": {
-				"ENVIRONMENT": "production",
-				// R2 bucket binding configuration
-				"R2_BUCKET_BINDING": "R2",
-				// Logging configuration
-				"LOGGING": {
-					"level": "debug",
-					"pretty": true,
-					"breadcrumbs": true,
-					"redact": [
-						"headers.authorization",
-						"headers.cookie",
-						"headers.x-api-key"
-					]
-				},
-				// Storage settings
-				"STORAGE": {
-					"maxRetries": 3,
-					"retryDelay": 1000,
-					"exponentialBackoff": true,
-					"defaultListLimit": 1000
-				},
-				// Cache settings - used for Cache API and Cache-Control headers
-				"CACHE": {
-					// TTL in seconds for Cache-Control max-age
-					"defaultMaxAge": 86400, // 1 day
-					"defaultStaleWhileRevalidate": 86400, // 1 day
-					// Cache configuration
-					"cacheEnabled": true, // Global toggle to enable/disable caching
-					"bypassParamEnabled": true,
-					"bypassParamName": "no-cache",
-					// Cache tagging for cache invalidation via Cloudflare API
-					"cacheTags": {
-						"enabled": true,
-						"prefix": "cdn-",
-						"defaultTags": [
-							"cdn",
-							"r2-objects"
-						]
-					},
-					// Content-type specific cache configuration
-					"objectTypeConfig": {
-						"image": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"images"
-							]
-						},
-						"static": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"static"
-							]
-						},
-						"document": {
-							"maxAge": 86400, // 1 day
-							"tags": [
-								"documents"
-							]
-						},
-						"video": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"video"
-							]
-						},
-						"audio": {
-							"maxAge": 604800, // 7 days
-							"tags": [
-								"media",
-								"audio"
-							]
-						}
-					},
-					// Types that should never be cached
-					"sensitiveTypes": [
-						"private",
-						"secure"
-					]
-				},
-				// Security settings
-				"SECURITY": {
-					"headers": {
-						"default": {
-							"X-Content-Type-Options": "nosniff",
-							"Content-Security-Policy": "default-src 'none'"
-						},
-						"image": {
-							"Content-Security-Policy": "default-src 'none'; img-src 'self'"
-						},
-						"document": {
-							"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
-						},
-						"font": {
-							"Content-Security-Policy": "default-src 'none'; font-src 'self'"
-						}
-					}
-				}
-			},
+	"vars": {
+		"ENVIRONMENT": "production",
+		"BUCKET_ROUTING": {
 			"routes": [
-				{
-					"pattern": "cdn.erfianugrah.com",
-					"custom_domain": true
-				}
+				{ "host": "cdn.erfianugrah.com", "pathPrefix": "/", "bucket": "R2" },
+				{ "host": "videos.erfi.dev", "pathPrefix": "/", "bucket": "VIDEOS" }
 			],
-			"r2_buckets": [
-				{
-					"binding": "R2",
-					"bucket_name": "images-weur"
+			"defaultBucket": "R2"
+		},
+		"STORAGE": {
+			"maxRetries": 3,
+			"retryDelay": 1000,
+			"exponentialBackoff": true
+		},
+		"CACHE": {
+			"defaultMaxAge": 86400,
+			"defaultStaleWhileRevalidate": 86400,
+			"cacheEnabled": true,
+			"bypassParamEnabled": true,
+			"bypassParamName": "no-cache",
+			"cacheTags": {
+				"enabled": true,
+				"prefix": "cdn-",
+				"defaultTags": ["cdn", "r2-objects"]
+			},
+			"objectTypeConfig": {
+				"image": { "maxAge": 86400, "tags": ["images"] },
+				"static": { "maxAge": 604800, "tags": ["static"] },
+				"document": { "maxAge": 86400, "tags": ["documents"] },
+				"video": { "maxAge": 604800, "tags": ["media", "video"] },
+				"audio": { "maxAge": 604800, "tags": ["media", "audio"] }
+			}
+		},
+		"SECURITY": {
+			"headers": {
+				"default": {
+					"X-Content-Type-Options": "nosniff",
+					"Content-Security-Policy": "default-src 'none'"
+				},
+				"image": {
+					"Content-Security-Policy": "default-src 'none'; img-src 'self'"
+				},
+				"document": {
+					"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+				},
+				"font": {
+					"Content-Security-Policy": "default-src 'none'; font-src 'self'"
 				}
-			]
+			}
 		}
-	}
+	},
+	"routes": [
+		{ "pattern": "cdn.erfianugrah.com", "custom_domain": true },
+		{ "pattern": "videos.erfi.dev", "custom_domain": true }
+	],
+	"r2_buckets": [
+		{ "binding": "R2", "bucket_name": "images-weur" },
+		{ "binding": "VIDEOS", "bucket_name": "videos" }
+	]
 }

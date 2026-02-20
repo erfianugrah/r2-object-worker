@@ -10,6 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Generate Short SHA
         id: short_sha
         run: echo "SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
@@ -20,8 +32,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '4.4.0'
-          command: versions upload --env prod --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
+          packageManager: 'npm'
+          command: versions upload --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
 
       - name: List Versions
         id: list_versions
@@ -29,8 +41,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '4.4.0'
-          command: versions list --env prod --json
+          packageManager: 'npm'
+          command: versions list --json
 
       - name: Extract New Version ID
         id: extract_version
@@ -47,8 +59,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '4.4.0'
-          command: versions deploy ${{ steps.extract_version.outputs.new_version }}@100% --env prod -y
+          packageManager: 'npm'
+          command: versions deploy ${{ steps.extract_version.outputs.new_version }}@100% -y
 
       - name: Error if no valid version
         if: steps.extract_version.outputs.new_version == ''
