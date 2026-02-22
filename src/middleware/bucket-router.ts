@@ -12,8 +12,9 @@ export const bucketRouter = createMiddleware<{
 	Variables: AppVariables;
 }>(async (c, next) => {
 	const routing = c.env.BUCKET_ROUTING;
-	const hostname = new URL(c.req.url).hostname;
-	const pathname = new URL(c.req.url).pathname;
+	const url = new URL(c.req.url);
+	const hostname = url.hostname;
+	const pathname = url.pathname;
 
 	let matched: BucketRoute | undefined;
 
@@ -45,6 +46,7 @@ export const bucketRouter = createMiddleware<{
 
 	c.set('bucket', bucket);
 	c.set('bucketName', bucketName);
+	c.set('r2BucketName', matched?.bucketName ?? '');
 	c.set('objectKey', objectKey);
 
 	await next();

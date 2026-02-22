@@ -13,8 +13,16 @@ const TEST_BODY = new Uint8Array(2048).fill(0xff);
 async function fetchApp(request: Request): Promise<Response> {
 	const ctx = createExecutionContext();
 	const res = await app.fetch(request, env, ctx);
+	// Read the response body first to drive any streaming pump loops,
+	// then wait for background tasks (waitUntil) to complete.
+	// Without this ordering, waitOnExecutionContext blocks on the pump
+	// which blocks on the client reading the stream — deadlock.
+	const body = await res.arrayBuffer();
 	await waitOnExecutionContext(ctx);
-	return res;
+	return new Response(body, {
+		status: res.status,
+		headers: res.headers,
+	});
 }
 
 beforeAll(async () => {
@@ -180,22 +188,15 @@ describe('Content-Type detection', () => {
 });
 
 describe('Security headers', () => {
-	it('applies image-specific CSP for image objects', async () => {
+	it('sets X-Content-Type-Options nosniff', async () => {
 		const res = await fetchApp(new Request(`https://cdn.erfianugrah.com/${TEST_KEY}`));
-		expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'none'; img-src 'self'");
+		expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
 		await res.body?.cancel();
 	});
 
-	it('applies default CSP for non-image objects', async () => {
-		const bucket = env.R2 as R2Bucket;
-		await bucket.put('test.zip', new Uint8Array(16), {
-			httpMetadata: { contentType: 'application/zip' },
-		});
-
-		const res = await fetchApp(new Request('https://cdn.erfianugrah.com/test.zip'));
-		expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'none'");
+	it('does not set CSP headers', async () => {
+		const res = await fetchApp(new Request(`https://cdn.erfianugrah.com/${TEST_KEY}`));
+		expect(res.headers.has('Content-Security-Policy')).toBe(false);
 		await res.body?.cancel();
-
-		await bucket.delete('test.zip');
 	});
 });

@@ -8,9 +8,12 @@
 export interface Env {
 	BUCKET_ROUTING: BucketRoutingConfig;
 	CACHE: CacheConfig;
-	SECURITY: SecurityConfig;
 	STORAGE: StorageConfig;
+	S3: S3Config;
+	S3_ACCESS_KEY_ID: string;
+	S3_SECRET_ACCESS_KEY: string;
 	ENVIRONMENT: string;
+	CDN_CACHE?: KVNamespace;
 	[key: string]: unknown;
 }
 
@@ -23,6 +26,8 @@ export interface BucketRoute {
 	pathPrefix: string;
 	/** Name of the R2 binding in wrangler config */
 	bucket: string;
+	/** Actual R2 bucket name for S3 API access */
+	bucketName: string;
 	/** If true, the pathPrefix is stripped from the R2 key */
 	stripPrefix?: boolean;
 }
@@ -30,6 +35,12 @@ export interface BucketRoute {
 export interface BucketRoutingConfig {
 	routes: BucketRoute[];
 	defaultBucket: string;
+}
+
+// ── S3 API access (alternative to R2 binding) ────────────────────────────────
+
+export interface S3Config {
+	endpoint: string;
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -63,19 +74,6 @@ export interface CacheConfig {
 	objectTypeConfig: Record<string, ObjectTypeCacheConfig>;
 }
 
-// ── Security ──────────────────────────────────────────────────────────────────
-
-export interface SecurityHeadersConfig {
-	[headerName: string]: string;
-}
-
-export interface SecurityConfig {
-	headers: {
-		default: SecurityHeadersConfig;
-		[objectType: string]: SecurityHeadersConfig;
-	};
-}
-
 // ── Object types ──────────────────────────────────────────────────────────────
 
 export type ObjectType =
@@ -94,5 +92,7 @@ export type ObjectType =
 export interface AppVariables {
 	bucket: R2Bucket;
 	bucketName: string;
+	/** Actual R2 bucket name (for S3 API access) */
+	r2BucketName: string;
 	objectKey: string;
 }

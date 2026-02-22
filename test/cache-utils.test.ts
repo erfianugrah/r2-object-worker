@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateCacheTags, buildCacheControl, buildResponseHeaders } from '../src/utils/cache';
-import type { CacheConfig, SecurityConfig } from '../src/types';
+import type { CacheConfig } from '../src/types';
 
 const baseCacheConfig: CacheConfig = {
 	defaultMaxAge: 86400,
@@ -19,17 +19,6 @@ const baseCacheConfig: CacheConfig = {
 	},
 };
 
-const baseSecurityConfig: SecurityConfig = {
-	headers: {
-		default: {
-			'X-Content-Type-Options': 'nosniff',
-			'Content-Security-Policy': "default-src 'none'",
-		},
-		image: {
-			'Content-Security-Policy': "default-src 'none'; img-src 'self'",
-		},
-	},
-};
 
 describe('generateCacheTags', () => {
 	it('generates tags with prefix, type, and defaults', () => {
@@ -73,7 +62,7 @@ describe('buildCacheControl', () => {
 describe('buildResponseHeaders', () => {
 	it('sets ETag, Content-Length, Accept-Ranges, Cache-Control', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/jpeg' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc123"',
 			size: 1024,
 			objectKey: 'photo.jpg',
@@ -83,24 +72,24 @@ describe('buildResponseHeaders', () => {
 		expect(headers.get('Content-Length')).toBe('1024');
 		expect(headers.get('Accept-Ranges')).toBe('bytes');
 		expect(headers.get('Cache-Control')).toContain('max-age=86400');
-		expect(headers.get('Vary')).toBe('Accept-Encoding');
+		expect(headers.has('Vary')).toBe(false);
 	});
 
-	it('applies security headers with type override', () => {
+	it('sets X-Content-Type-Options nosniff', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/jpeg' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'x.jpg',
 		});
 		expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
-		// Image type overrides default CSP
-		expect(headers.get('Content-Security-Policy')).toBe("default-src 'none'; img-src 'self'");
+		// No CSP on a static asset CDN
+		expect(headers.has('Content-Security-Policy')).toBe(false);
 	});
 
 	it('sets no-store when bypass is true', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/jpeg' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'x.jpg',
@@ -113,7 +102,7 @@ describe('buildResponseHeaders', () => {
 
 	it('sets Cache-Tag header', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/jpeg' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'photo.jpg',
@@ -128,7 +117,7 @@ describe('buildResponseHeaders', () => {
 
 	it('includes custom tags', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/jpeg' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'photo.jpg',
@@ -141,7 +130,7 @@ describe('buildResponseHeaders', () => {
 
 	it('preserves R2 httpMetadata Content-Type', () => {
 		const r2Headers = new Headers({ 'Content-Type': 'image/webp' });
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'photo.jpg', // extension says jpeg, but R2 says webp
@@ -151,7 +140,7 @@ describe('buildResponseHeaders', () => {
 
 	it('falls back to extension when R2 has no Content-Type', () => {
 		const r2Headers = new Headers();
-		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, baseSecurityConfig, {
+		const headers = buildResponseHeaders(r2Headers, 'image', baseCacheConfig, {
 			etag: '"abc"',
 			size: 100,
 			objectKey: 'photo.jpg',

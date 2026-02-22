@@ -20,10 +20,13 @@
 		"ENVIRONMENT": "production",
 		"BUCKET_ROUTING": {
 			"routes": [
-				{ "host": "cdn.erfianugrah.com", "pathPrefix": "/", "bucket": "R2" },
-				{ "host": "videos.erfi.dev", "pathPrefix": "/", "bucket": "VIDEOS" }
+				{ "host": "cdn.erfianugrah.com", "pathPrefix": "/", "bucket": "R2", "bucketName": "images-weur" },
+				{ "host": "videos.erfi.dev", "pathPrefix": "/", "bucket": "VIDEOS", "bucketName": "videos" }
 			],
 			"defaultBucket": "R2"
+		},
+		"S3": {
+			"endpoint": "https://25f21f141824546aa72c74451a11b419.r2.cloudflarestorage.com"
 		},
 		"STORAGE": {
 			"maxRetries": 3,
@@ -49,23 +52,6 @@
 				"audio": { "maxAge": 604800, "tags": ["media", "audio"] }
 			}
 		},
-		"SECURITY": {
-			"headers": {
-				"default": {
-					"X-Content-Type-Options": "nosniff",
-					"Content-Security-Policy": "default-src 'none'"
-				},
-				"image": {
-					"Content-Security-Policy": "default-src 'none'; img-src 'self'"
-				},
-				"document": {
-					"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
-				},
-				"font": {
-					"Content-Security-Policy": "default-src 'none'; font-src 'self'"
-				}
-			}
-		}
 	},
 	"routes": [
 		{ "pattern": "cdn.erfianugrah.com", "custom_domain": true },
@@ -74,5 +60,8 @@
 	"r2_buckets": [
 		{ "binding": "R2", "bucket_name": "images-weur" },
 		{ "binding": "VIDEOS", "bucket_name": "videos" }
+	],
+	"kv_namespaces": [
+		{ "binding": "CDN_CACHE", "id": "e8005733f5a6456ba493ec1454fade26" }
 	]
 }

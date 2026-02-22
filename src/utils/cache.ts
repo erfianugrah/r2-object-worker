@@ -1,4 +1,4 @@
-import type { CacheConfig, ObjectType, SecurityConfig } from '../types';
+import type { CacheConfig, ObjectType } from '../types';
 import { getContentType } from './content-type';
 
 // ── Cache tags ────────────────────────────────────────────────────────────────
@@ -23,6 +23,12 @@ export function generateCacheTags(
 
 	if (objectType) {
 		tags.push(`${prefix}type-${objectType}`);
+
+		// Include per-object-type tags from objectTypeConfig (e.g. "images", "media")
+		const otConfig = cacheConfig.objectTypeConfig[objectType];
+		if (otConfig?.tags?.length) {
+			tags.push(...otConfig.tags.map((t) => `${prefix}${t}`));
+		}
 	}
 
 	if (Array.isArray(tagConfig.defaultTags)) {
@@ -42,6 +48,9 @@ export function buildCacheControl(
 	const maxAge = otConfig?.maxAge ?? cacheConfig.defaultMaxAge;
 	const swr = cacheConfig.defaultStaleWhileRevalidate;
 
+	// NOTE: stale-while-revalidate is NOT supported by the Workers Cache API
+	// (cache.put/cache.match ignore it). It is included here for downstream
+	// clients and CDN layers (e.g. browsers, upstream proxies) that do honor it.
 	return `public, max-age=${maxAge}, stale-while-revalidate=${swr}`;
 }
 
@@ -55,7 +64,6 @@ export function buildResponseHeaders(
 	r2Headers: Headers,
 	objectType: ObjectType,
 	cacheConfig: CacheConfig,
-	securityConfig: SecurityConfig,
 	extra: {
 		etag: string;
 		size: number;
@@ -81,6 +89,9 @@ export function buildResponseHeaders(
 	// Accept-Ranges — we support range requests
 	headers.set('Accept-Ranges', 'bytes');
 
+	// Prevent MIME-sniffing
+	headers.set('X-Content-Type-Options', 'nosniff');
+
 	if (extra.bypass) {
 		headers.set('Cache-Control', 'no-store, max-age=0');
 		return headers;
@@ -90,22 +101,12 @@ export function buildResponseHeaders(
 	// our per-object-type policy. If you want R2's Cache-Control to take
 	// precedence, remove this line.
 	headers.set('Cache-Control', buildCacheControl(objectType, cacheConfig));
-	headers.set('Vary', 'Accept-Encoding');
 
 	// Cache tags
 	const tags = generateCacheTags(objectType, cacheConfig, extra.objectKey, extra.host);
 	if (extra.customTags?.length) tags.push(...extra.customTags);
 	if (tags.length) {
 		headers.set('Cache-Tag', tags.join(','));
-	}
-
-	// Security headers
-	const secHeaders = { ...securityConfig.headers.default };
-	if (securityConfig.headers[objectType]) {
-		Object.assign(secHeaders, securityConfig.headers[objectType]);
-	}
-	for (const [k, v] of Object.entries(secHeaders)) {
-		headers.set(k, v);
 	}
 
 	return headers;

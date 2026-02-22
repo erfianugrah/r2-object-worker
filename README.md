@@ -1,281 +1,256 @@
-# R2 Objects Worker
+# R2 Object Worker
 
-[![npm version](https://img.shields.io/npm/v/r2-objects-worker)](https://www.npmjs.com/package/r2-objects-worker)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/github/actions/workflow/status/erfi/r2-object-worker/test.yml?branch=main&label=tests)](https://github.com/erfi/r2-object-worker/actions)
-[![Deploy](https://img.shields.io/github/actions/workflow/status/erfi/r2-object-worker/deploy.yml?branch=main&label=deploy)](https://github.com/erfi/r2-object-worker/actions)
+A Cloudflare Worker that serves objects from R2 buckets with two-tier caching (Cache API + KV fallback), range request support, conditional request handling, and multi-bucket routing. Built with TypeScript and Hono.
 
-A Cloudflare Worker for serving objects (images, documents, videos, etc.) from R2 buckets with proper caching, content type handling, and cache invalidation support.
+## How it works
 
-## Features
+A single worker instance fronts multiple R2 buckets, routing requests by hostname:
 
-- Serves any type of object from R2 storage with proper content types
-- Implements Cloudflare Cache API for explicit caching control and CF-Cache-Status headers
-- Configurable cache tags for selective cache purging
-- Advanced caching strategies based on object type
-- Optimized for different content types (images, documents, videos, static assets, fonts, archives)
-- Supports range requests for partial content (useful for video/audio streaming)
-- Content type auto-detection based on file extensions
-- Conditional requests with ETags for efficient validation caching
-- Configurable via wrangler.jsonc with environment-specific overrides
-- Health check endpoint
-- Object listing endpoint with prefix filtering
-- Domain-driven design architecture
-- Centralized error handling
-- Retry logic with exponential backoff for R2 operations
-- Comprehensive logging with Pino
+- `cdn.erfianugrah.com` -> `images-weur` R2 bucket
+- `videos.erfi.dev` -> `videos` R2 bucket
 
-## Architecture
+### Two-tier caching
 
-The application follows a domain-driven design approach with the following structure:
+Objects are cached at two layers, with automatic routing based on size:
 
-- `src/domain/` - Business logic organized by domain
-  - `objects/` - Object handling logic (repositories, services, controllers)
-  - `health/` - Health check functionality
-- `src/infrastructure/` - Infrastructure code
-  - `config/` - Configuration loader with environment variable support
-  - `storage/` - R2 storage adapter
-  - `utils/` - Utilities for caching, content types, etc.
-  - `errors/` - Centralized error handling
-  - `router/` - Request routing based on paths and methods
+| Tier | Used for | Mechanism | Why |
+|------|----------|-----------|-----|
+| **Cache API** | Objects <= 28 MB | `cache.put()` via dual FixedLengthStream pump | Cloudflare edge cache, fastest |
+| **Workers KV** | Objects > 28 MB | Chunked 20 MiB entries with JSON manifest | Cache API silently drops entries above ~28.5 MB |
 
-### Architectural Patterns
+**Cache lookup order:** Cache API -> KV cache -> R2 origin
 
-The application implements several architectural patterns:
+On cache miss, the worker fetches from R2 and streams to the client while simultaneously caching in the background:
 
-1. **Repository Pattern**: The ObjectRepository abstracts data access from business logic
-2. **Adapter Pattern**: The R2StorageAdapter isolates the R2 implementation details
-3. **Dependency Injection**: All components receive their dependencies through constructors
-4. **Middleware Pattern**: Request processing includes middleware-like functions for headers and caching
-5. **Router**: Pattern-based routing with method filtering
+- **<= 28 MB (Cache API path):** Two `FixedLengthStream` instances are created — one for the client, one for `cache.put()`. A pump reads R2 chunks and writes to both streams simultaneously. `cache.put()` runs as a floating promise (not in `waitUntil()`) so backpressure flows correctly.
 
-## Caching Strategy
+- **> 28 MB (KV path):** `.tee()` splits the R2 body stream — one branch goes to the client, the other is consumed by `kvCachePutStream()` in `waitUntil()`. The stream is read incrementally, assembling 20 MiB chunks on the fly, and each chunk is uploaded to KV as it fills. Peak memory usage is ~20 MiB regardless of total object size.
 
-The worker implements a multi-layered caching strategy:
+### The Cache API size limit
 
-1. **Cloudflare Cache API** - Explicitly stores and retrieves responses from Cloudflare's cache
-2. **Cache Tags** - Configurable object-type and custom tags for selective cache purging
-3. **Content-Type Based Optimization** - Different caching strategies based on content type
-4. **Cache-Control Headers** - Standard cache control with stale-while-revalidate support
-5. **ETags and Conditional Requests** - Efficient validation caching
+The Cloudflare Cache API has an **undocumented ~28.5 MB per-object size limit** in production. `cache.put()` resolves without error but silently discards the entry — `cache.match()` returns nothing. The official docs claim 512 MB.
 
-All caching behavior is configurable via the wrangler.jsonc file.
+This was empirically determined by deploying a test worker that writes synthetic objects at various sizes using 5 different body strategies (ArrayBuffer, FixedLengthStream, `.tee()`, R2 body stream, R2+tee). **All strategies hit the same wall:**
 
-## Supported Object Types
+- 28.5 MB (29,884,416 bytes) = **HIT**
+- 29.0 MB (30,408,704 bytes) = **MISS**
 
-The worker automatically detects and optimizes handling for these object types:
+Tested at AMS colo. The limit is server-side, not related to streaming or body type.
 
-- **image**: Images (jpg, png, gif, webp, svg, etc.)
-- **video**: Video files (mp4, webm, avi, etc.)
-- **audio**: Audio files (mp3, wav, ogg, etc.)
-- **document**: Documents (pdf, doc, docx, etc.)
-- **static**: Static web assets (js, css, html, etc.)
-- **font**: Font files (woff, woff2, ttf, etc.)
-- **archive**: Archive files (zip, tar, gz, etc.)
-- **binary**: Generic binary files
+### KV storage layout
 
-Each object type can have custom caching, security, and optimization settings.
+Each KV-cached object uses multiple keys:
+
+```
+Small objects (<= 20 MiB):
+  {url}       -> JSON metadata (KVCacheMetadata in KV metadata field)
+  {url}_body  -> raw ArrayBuffer
+
+Large objects (> 20 MiB):
+  {url}           -> JSON ChunkManifest + KVCacheMetadata
+  {url}_chunk_0   -> first 20 MiB
+  {url}_chunk_1   -> next 20 MiB
+  ...
+  {url}_chunk_N   -> final chunk (may be < 20 MiB)
+```
+
+All keys share the same `expirationTtl` (matching the object's `max-age`) so they auto-expire together.
+
+### Cache keys
+
+Two cache keys are used per request:
+
+- `cacheMatchKey = new Request(url, request)` — inherits the original request's Range, If-None-Match, and If-Modified-Since headers. `cache.match()` handles these automatically, returning 206 for range requests and 304 for conditional requests.
+- `cachePutKey = new Request(url, { method: 'GET' })` — a plain GET used for `cache.put()` and KV, storing the full 200 response.
+
+`cache.match()` is called with `{ ignoreMethod: true }` so HEAD requests also hit cache.
+
+### Range requests
+
+On a cache miss with a Range header, the worker returns 206 to the client immediately from R2, then background-fetches the full object and caches it via `ctx.waitUntil()`. Subsequent requests (range or full) are served from cache.
+
+For KV-cached chunked objects, range requests are handled by calculating which chunks overlap with the requested byte range, fetching only those chunks, and slicing at chunk boundaries to extract the exact bytes.
+
+### Conditional requests
+
+R2 accepts `Headers` objects directly for `onlyIf` and `range` options. When an `onlyIf` condition fails (e.g. ETag matches), R2 returns an `R2Object` without a body — the worker detects this with `!('body' in object)` and returns 304.
+
+## Project structure
+
+```
+src/
+  index.ts                  Hono app, routes (GET /, GET/HEAD /*)
+  types.ts                  All TypeScript interfaces
+  middleware/
+    bucket-router.ts        Resolves R2 bucket from host + path prefix
+  services/
+    object.ts               Core logic: R2 fetch, cache/KV routing, streaming, range/conditional
+    kv-cache.ts             KV cache: chunked storage, streaming writes, range retrieval
+  utils/
+    cache.ts                Cache tags, Cache-Control, response header building
+    content-type.ts         MIME detection, ObjectType classification
+test/
+  cache-tee.test.ts         20 .tee() and Cache API tests (stream splitting, sizes, range)
+  integration.test.ts       13 integration tests (worker-level via MWFE)
+  cache-utils.test.ts       13 cache utility unit tests
+  content-type.test.ts      12 content type unit tests
+  env.d.ts                  Type declarations for cloudflare:test
+wrangler.jsonc              Flat config (no env blocks)
+vitest.config.ts            @cloudflare/vitest-pool-workers config
+tsconfig.json               TypeScript config
+```
 
 ## Configuration
 
-All configuration is managed through `wrangler.jsonc`. The configuration is structured in three main sections:
+All configuration lives in `wrangler.jsonc` as worker vars. No environment-specific blocks — one flat config deployed directly.
 
-1. **Storage Configuration**
-   - Controls behavior of storage operations (retries, timeouts, etc.)
-   ```json
-   "STORAGE": {
-     "maxRetries": 3,
-     "retryDelay": 1000,
-     "exponentialBackoff": true,
-     "defaultListLimit": 1000
-   }
-   ```
+### Bucket routing
 
-2. **Cache Configuration**
-   - Sets cache TTLs and strategies based on object type
-   - Configures Cloudflare-specific caching features
-   - Configures cache tags for cache purging
-   ```json
-   "CACHE": {
-     "defaultMaxAge": 86400,
-     "defaultStaleWhileRevalidate": 86400,
-     "cacheEverything": true,
-     "cacheTags": {
-       "enabled": true,
-       "prefix": "cdn-",
-       "defaultTags": ["cdn", "r2-objects"]
-     },
-     "objectTypeConfig": {
-       "image": {
-         "polish": "lossy",
-         "webp": true,
-         "maxAge": 86400,
-         "tags": ["images"]
-       }
-     },
-     "sensitiveTypes": ["private", "secure"]
-   }
-   ```
-
-3. **Security Configuration**
-   - Defines security headers based on object type
-   ```json
-   "SECURITY": {
-     "headers": {
-       "default": {
-         "X-Content-Type-Options": "nosniff",
-         "Content-Security-Policy": "default-src 'none'"
-       },
-       "image": {
-         "Content-Security-Policy": "default-src 'none'; img-src 'self'"
-       }
-     }
-   }
-   ```
-
-### Configuration via Environment Variables
-
-All configuration can be overridden using environment variables at runtime. The Config class will prioritize values from the environment over the defaults in wrangler.jsonc.
-
-## Logging
-
-The application implements comprehensive logging using Pino:
-
-- Log levels configurable by environment
-- Request ID and trace ID tracking
-- Breadcrumb trails for tracking request flow
-- Performance metrics logging
-- Redaction of sensitive information
-- Structured logging format for easy querying
-- Pretty printing in development mode
-
-## Error Handling
-
-The application implements centralized error handling:
-
-- Custom error classes with HTTP status codes
-- Automatic error response formatting
-- Error logging and monitoring support
-- Different error responses based on error type
-
-## API Endpoints
-
-- `GET /` - Returns basic info about the CDN
-- `GET /_health` - Health check endpoint
-- `GET /_list?prefix=<prefix>&limit=<limit>` - List objects with optional prefix and limit
-- `GET /<key>` - Retrieve object by key with appropriate content type and caching
-
-## Custom Cache Tags
-
-You can add custom cache tags to objects by including them in the URL query parameter:
-
-```
-GET /images/photo.jpg?tags=product-123,promo-summer
+```jsonc
+"BUCKET_ROUTING": {
+  "routes": [
+    { "host": "cdn.erfianugrah.com", "pathPrefix": "/", "bucket": "R2", "bucketName": "images-weur" },
+    { "host": "videos.erfi.dev", "pathPrefix": "/", "bucket": "VIDEOS", "bucketName": "videos" }
+  ],
+  "defaultBucket": "R2"
+}
 ```
 
-This adds the specified tags to the Cloudflare cache entry, allowing you to purge specific items by tag later. Custom tags appear in both the Cache-Tag response header and the cf.cacheTags object.
+Host patterns support wildcards (`*.erfi.dev`). Routes are matched in order (first match wins). The `stripPrefix` option removes the path prefix from the R2 key when set.
 
-Tags are applied in three levels:
-1. Default tags from configuration (e.g., "cdn", "r2-objects")
-2. Object-type specific tags (e.g., "images" for image files)
-3. Custom tags provided in the URL query parameter
+### Cache
 
-## Cache Invalidation
+```jsonc
+"CACHE": {
+  "defaultMaxAge": 86400,
+  "defaultStaleWhileRevalidate": 86400,
+  "cacheEnabled": true,
+  "bypassParamEnabled": true,
+  "bypassParamName": "no-cache",
+  "cacheTags": {
+    "enabled": true,
+    "prefix": "cdn-",
+    "defaultTags": ["cdn", "r2-objects"]
+  },
+  "objectTypeConfig": {
+    "image": { "maxAge": 86400, "tags": ["images"] },
+    "static": { "maxAge": 604800, "tags": ["static"] },
+    "document": { "maxAge": 86400, "tags": ["documents"] },
+    "video": { "maxAge": 604800, "tags": ["media", "video"] },
+    "audio": { "maxAge": 604800, "tags": ["media", "audio"] }
+  }
+}
+```
 
-Objects can be purged from the cache using Cloudflare's cache purge API, targeting specific cache tags:
+Cache bypass: `?no-cache` query param skips cache and returns `Cache-Control: no-store`. Also bypassed when the request includes `Cache-Control: no-cache`.
+
+### KV namespace
+
+```jsonc
+"kv_namespaces": [
+  { "binding": "CDN_CACHE", "id": "e8005733f5a6456ba493ec1454fade26" }
+]
+```
+
+The `CDN_CACHE` binding is optional. If not present, objects > 28 MB are served from R2 on every request without caching.
+
+### Storage
+
+```jsonc
+"STORAGE": {
+  "maxRetries": 3,
+  "retryDelay": 1000,
+  "exponentialBackoff": true
+}
+```
+
+R2 operations retry up to 3 times with exponential backoff (1s, 2s, 4s).
+
+## Cache tags and purging
+
+Every cached response gets a `Cache-Tag` header with tags derived from:
+
+1. Object-specific tag: `cdn-cdn.erfianugrah.com/path/to/file.jpg`
+2. Type tag: `cdn-type-image`
+3. Object type config tags: `cdn-images`
+4. Default tags: `cdn-cdn`, `cdn-r2-objects`
+5. Custom tags via `?tags=foo,bar` query param
+
+Purge by tag:
 
 ```bash
 curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
-     -H "Authorization: Bearer {api_token}" \
-     -H "Content-Type: application/json" \
-     --data '{"tags":["cdn-images","cdn-type-image","product-123"]}'
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  --data '{"tags":["cdn-type-image"]}'
 ```
 
-Examples of tags you can use for purging:
-- `cdn-images` - Purge all image files
-- `cdn-type-video` - Purge all video files
-- `product-123` - Purge a specific product image that had this custom tag
-- `promo-summer` - Purge all assets related to a summer promotion
+Note: Cache tag purging only affects Cache API entries. KV-cached objects expire via `expirationTtl` — there is no tag-based purge mechanism for KV. To force-evict a KV-cached object, delete its keys from the `CDN_CACHE` namespace via the Cloudflare dashboard or API.
 
-## Performance Considerations
+## Content type detection
 
-The worker implements several performance optimizations:
+R2's `httpMetadata` (via `writeHttpMetadata()`) is the source of truth for Content-Type. The worker only falls back to extension-based detection if R2 doesn't provide one. Supported object types: `image`, `video`, `audio`, `document`, `static`, `font`, `archive`, `binary`.
 
-1. **Content Type Detection**: Efficient extension-based content type detection
-2. **Range Requests**: Support for partial content requests to optimize large media streaming
-3. **ETag-based Validation**: Conditional request handling to minimize bandwidth
-4. **Smart Cache TTLs**: Different caching durations based on content type
-5. **Cloudflare Cache API**: Direct integration with Cloudflare's caching infrastructure
-6. **Cache Tags**: Granular cache invalidation
-7. **Retry Logic**: Automatic retries with exponential backoff
+## API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Returns "Object CDN" |
+| GET | `/*` | Serve object from R2 with caching |
+| HEAD | `/*` | Same as GET (returns headers only, hits cache via `ignoreMethod`) |
+
+Query params: `?no-cache` (bypass cache), `?tags=a,b` (add custom cache tags), `?via=s3` (use S3 API instead of R2 binding).
+
+### Response headers
+
+| Header | Value | Meaning |
+|--------|-------|---------|
+| `X-Fetch-Via` | `r2-binding` or `s3` | Which origin path was used (only on cache miss) |
+| `CF-Cache-Status` | `HIT` | Served from Cache API (set by Cloudflare, not by us) |
+| `CF-Cache-Status` | `DYNAMIC` | Response was generated by the worker (includes KV hits and origin fetches) |
+| `X-KV-Cache-Status` | `HIT` | Served from KV cache |
+
+`CF-Cache-Status` is managed by Cloudflare's Cache API layer — we never set it ourselves. Cache API hits show `HIT`; everything else shows `DYNAMIC`. To identify KV cache hits, check for `X-KV-Cache-Status: HIT`.
 
 ## Development
 
-### Prerequisites
-
-- Node.js 16+
-- npm or yarn
-- Wrangler CLI (`npm install -g wrangler`)
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Configure wrangler.jsonc with your settings
-4. Run the development server: `npm run dev`
-
-### Testing
-
-- Run tests: `npm test`
-- Run tests in watch mode: `npm run test:watch`
+```bash
+npm install
+npm run dev          # wrangler dev on port 9001
+npm run typecheck    # tsc --noEmit
+npm test             # vitest run (58 tests)
+npm run test:watch   # vitest watch mode
+```
 
 ## Deployment
 
-- Deploy to staging: `npm run deploy:staging`
-- Deploy to production: `npm run deploy:prod`
+```bash
+npm run deploy       # wrangler deploy (single flat config, no env flag needed)
+```
 
-## Extending the Worker
+CI/CD: GitHub Actions workflow in `.github/workflows/deploy.yml`.
 
-### Adding New Object Types
+## Error handling
 
-To add support for a new object type:
+- Cache operations (both Cache API and KV) are wrapped in try/catch — cache failures never kill the request
+- R2 fetch failures return 502
+- Global `app.onError()` returns 500
+- R2 operations retry with exponential backoff
 
-1. Update the content-type.utils.js to include the new type and its extensions
-2. Add cache configuration for the new type in the default config
-3. Add security headers for the new type in the default config
-4. Test with example objects of the new type
+## Observability
 
-### Custom Request Processing
+- `logpush: true` — Cloudflare Logpush enabled
+- `observability.enabled: true` — Cloudflare observability enabled
+- `console.log()` for cache HIT/MISS/put results
+- `console.error()` for R2, cache, and KV failures (visible in Workers logs)
+- KV cache writes log chunk count, total size, and TTL
 
-The router can be extended to add custom request handling:
+## Dependencies
 
-1. Add a new pattern in the router
-2. Create a new controller, service, and repository if needed
-3. Update the router to use the new components
-
-## Recent Changes
-
-### Added Pino Logging
-- Comprehensive structured logging system
-- Request tracing with IDs
-- Performance metrics
-- Log levels configurable by environment
-
-### Improved Error Handling
-- Custom error classes with HTTP status codes
-- Centralized error handling
-- Detailed error logging
-
-### Enhanced Caching
-- Added advanced caching strategies
-- Support for cache tags
-- Improved cache control headers
-
-### Updated Router
-- Pattern-based routing
-- Method filtering
-- Improved request handling
-
-## License
-
-[MIT](./LICENSE)
+- **hono** — Router framework
+- **aws4fetch** — S3 API request signing (for `?via=s3` path)
+- **@cloudflare/vitest-pool-workers** — Test runner (dev)
+- **@cloudflare/workers-types** — Type definitions (dev)
+- **wrangler** — CLI and bundler (dev)
+- **vitest** — Test framework (dev)
+- **typescript** — Type checking (dev)
