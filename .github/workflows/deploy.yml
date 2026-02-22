@@ -22,9 +22,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Generate Short SHA
-        id: short_sha
-        run: echo "SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+      - name: Prepare Deploy Metadata
+        id: meta
+        env:
+          RAW_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          echo "SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+          # Take first line only, strip double quotes, and truncate to 120 chars
+          MSG=$(printf '%s' "$RAW_MSG" | head -n1 | tr -d '"' | cut -c1-120)
+          echo "commit_msg=${MSG}" >> $GITHUB_OUTPUT
 
       - name: Upload New Version
         id: upload_version
@@ -33,7 +39,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: 'npm'
-          command: versions upload --message "${{ github.event.head_commit.message }}" --tag "${{ steps.short_sha.outputs.SHA8 }}"
+          command: versions upload --message "${{ steps.meta.outputs.commit_msg }}" --tag "${{ steps.meta.outputs.SHA8 }}"
 
       - name: List Versions
         id: list_versions
