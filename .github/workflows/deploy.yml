@@ -52,10 +52,11 @@ jobs:
 
       - name: Extract New Version ID
         id: extract_version
+        env:
+          VERSIONS_JSON: ${{ steps.list_versions.outputs.command-output }}
         run: |
-          VERSIONS_JSON='${{ steps.list_versions.outputs.command-output }}'
-          echo "Versions JSON: $VERSIONS_JSON"
-          NEW_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.[0].id')
+          echo "Versions JSON (last 3): $(echo "$VERSIONS_JSON" | jq '.[-3:]')"
+          NEW_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.[-1].id')
           echo "New Version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
