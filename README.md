@@ -75,6 +75,8 @@ For KV-cached chunked objects, range requests are handled by calculating which c
 
 R2 accepts `Headers` objects directly for `onlyIf` and `range` options. When an `onlyIf` condition fails (e.g. ETag matches), R2 returns an `R2Object` without a body — the worker detects this with `!('body' in object)` and returns 304.
 
+304 responses include full headers (`Cache-Control`, `Content-Type`, `ETag`, `Last-Modified`, `X-Content-Type-Options`, cache tags) per RFC 9110 §15.4.5, minus body-specific headers (`Content-Length`, `Accept-Ranges`). This ensures clients like Astro's image optimizer can properly revalidate cached remote assets without re-downloading them.
+
 ## Project structure
 
 ```

@@ -282,11 +282,29 @@ async function getObjectViaS3(opts: {
 		return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
 	}
 
+	// Per RFC 9110 §15.4.5, a 304 SHOULD include headers that would have been
+	// sent in a 200 (especially Cache-Control, Content-Type, ETag, Last-Modified).
 	if (s3Response.status === 304) {
-		return new Response(null, {
-			status: 304,
-			headers: { ETag: s3Response.headers.get('ETag') || '' },
+		const nmContentType = s3Response.headers.get('Content-Type') || getContentType(key);
+		const nmObjectType = getObjectType(nmContentType);
+		const nmHost = new URL(request.url).hostname;
+		const nmHeaders = new Headers();
+		nmHeaders.set('Content-Type', nmContentType);
+		// Propagate Last-Modified from S3 304 if present
+		const nmLastModified = s3Response.headers.get('Last-Modified');
+		if (nmLastModified) nmHeaders.set('Last-Modified', nmLastModified);
+		const fullHeaders = buildResponseHeaders(nmHeaders, nmObjectType, cacheConfig, {
+			etag: s3Response.headers.get('ETag') || '',
+			size: 0,
+			objectKey: key,
+			host: nmHost,
+			customTags,
+			bypass: bypassCache,
 		});
+		// Remove body-specific headers that don't apply to 304
+		fullHeaders.delete('Content-Length');
+		fullHeaders.delete('Accept-Ranges');
+		return new Response(null, { status: 304, headers: fullHeaders });
 	}
 
 	if (!s3Response.ok || !s3Response.body) {
@@ -479,11 +497,30 @@ async function getObjectViaR2(opts: {
 	}
 
 	// ── 304 Not Modified (R2 returns R2Object without body when onlyIf fails) ─
+	// Per RFC 9110 §15.4.5, a 304 SHOULD include headers that would have been
+	// sent in a 200 (especially Cache-Control, Content-Type, ETag, Last-Modified).
+	// Bare-bones 304s break clients like Astro's image optimizer that rely on
+	// these headers during revalidation.
 	if (!('body' in object) || object.body === null) {
-		return new Response(null, {
-			status: 304,
-			headers: { ETag: object.httpEtag },
+		const notModifiedHeaders = new Headers();
+		object.writeHttpMetadata(notModifiedHeaders);
+		if (!notModifiedHeaders.has('Content-Type')) {
+			notModifiedHeaders.set('Content-Type', getContentType(key));
+		}
+		const nmObjectType = getObjectType(notModifiedHeaders.get('Content-Type')!);
+		const nmHost = new URL(request.url).hostname;
+		const fullHeaders = buildResponseHeaders(notModifiedHeaders, nmObjectType, cacheConfig, {
+			etag: object.httpEtag,
+			size: object.size,
+			objectKey: key,
+			host: nmHost,
+			customTags,
+			bypass: bypassCache,
 		});
+		// Remove body-specific headers that don't apply to 304
+		fullHeaders.delete('Content-Length');
+		fullHeaders.delete('Accept-Ranges');
+		return new Response(null, { status: 304, headers: fullHeaders });
 	}
 
 	const body = object as R2ObjectBody;

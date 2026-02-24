@@ -111,6 +111,12 @@ describe('Conditional requests', () => {
 		}));
 		expect(res.status).toBe(304);
 		expect(res.headers.get('ETag')).toBe(etag);
+		// RFC 9110 §15.4.5: 304 SHOULD include headers from the 200 response
+		expect(res.headers.get('Cache-Control')).toContain('no-store'); // bypass mode
+		expect(res.headers.get('Content-Type')).toBeTruthy();
+		// Body-specific headers must NOT be present on 304
+		expect(res.headers.get('Content-Length')).toBeNull();
+		expect(res.headers.get('Accept-Ranges')).toBeNull();
 	});
 });
 
